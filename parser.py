@@ -30,7 +30,7 @@ my_col_names = ['log-zi', 'time', 'log-days']
 bad_col_names = ['log zi', 'time, d', 'log days']
 more_bad_col_names = ['log  zi', 'time,    d', 'log  days']
 
-with open('tab.csv', 'rb') as file:
+with open('tab', 'rb') as file:
 	file.seek(0)
 	reader = csv.reader(file)
 	for line in file:
@@ -316,16 +316,19 @@ cleaned_df = cleaned_df.drop(['time', 'log-days'], axis=1)
 # for column_name in column_names:
 # 	smoothed_df[column_name] = spline(index_values,cleaned_df[column_name],xnew) #TODO getting divide by zero error
 
-cleaned_df.plot()
+ax = cleaned_df.plot()
+ax.set(xlabel='log zi', ylabel='log(moles) mineral')
 plt.savefig('minerals.png')
 
-molpropmin_df.plot()
+ax2 = molpropmin_df.plot()
+ax2.set(xlabel='log zi', ylabel='modal abundance of mineral')
 plt.savefig('modes.png')
 
 fig, ax1 = plt.subplots()
 redox_output_df.plot(ax=ax1, x='fl/rk wt ratio', y='Fe3+/Fetot_molar', logx=True)
 ax1.invert_xaxis()
 ax1.axhspan(0.20, 0.30, alpha=0.7, color='#fff0aa')
+ax1.set(xlabel='fl/rk wt ratio', ylabel='Fe3+/Fetot')
 plt.savefig('Fe23.png')
 #-------------------------#
 
