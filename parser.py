@@ -39,12 +39,12 @@ with open('tab', 'rb') as file:
 	startingline_minerals = [i for i in range(len(rows)) if str('log of moles of product') in rows[i]]
 	endingline_minerals = [i for i in range(len(rows)) if str('log of destroyed moles of reactants') in rows[i]]
 	startingline_minerals[0] += 5
-	endingline_minerals[0] -=3
+	#endingline_minerals[0] -=3 #dont do this, it's not universally true!
 
 	startingline_solidsolutions = [i for i in range(len(rows)) if str('solid solution product compositions') in rows[i]]
 	endingline_solidsolutions = [i for i in range(len(rows)) if str('log of moles of product minerals') in rows[i]]
 	startingline_solidsolutions[0] += 2
-	endingline_solidsolutions[0] -= 4
+	#endingline_solidsolutions[0] -= 2 #dont do this, it's not universally true!
 
 
 mineral_rows = rows[startingline_minerals[0]:endingline_minerals[0]]
@@ -232,6 +232,7 @@ for i in range(1,len(new_index2)):
 cleaned_df2['new_index2'] = new_index2
 cleaned_df2 = cleaned_df2.set_index('new_index2')
 cleaned_df2.index.name = 'log-zi'
+
 #--------------------------------------#
 
 
@@ -263,6 +264,7 @@ for col in moles_and_ss_df.columns.values:
 mingrams_df["Total grams"] = sum((mingrams_df[col] for col in mingrams_df.columns))
 mingrams_df["Total kg"] = mingrams_df["Total grams"] / 1000.0
 #----------------------------------------#
+
 
 ##------Calculate Fe3+/Fetot and fl/rock ratio and save to new df------##
 #create new df
@@ -341,8 +343,8 @@ for index, row in redox_output_df.iterrows():
 	if row["Fe3+/Fetot_molar"] < 0.30 and row["Fe3+/Fetot_molar"] > 0.20:
 		flrk_arc_values[index] = row["fl/rk wt ratio"]
 
-mineralogy_arc_values = molpropmin_df.loc[molpropmin_df.index.isin(flrk_arc_values)]
-redox_arc_avlues = redox_output_df.loc[redox_output_df.index.isin(flrk_arc_values)] #get values from redox_output_df at logzi values where Fe3+/Fetot within arc values
+mineralogy_arc_values = molpropmin_df.loc[molpropmin_df.index.isin(flrk_arc_values)].copy()
+redox_arc_avlues = redox_output_df.loc[redox_output_df.index.isin(flrk_arc_values)].copy() #get values from redox_output_df at logzi values where Fe3+/Fetot within arc values
 mineralogy_arc_values['Fe3+/Fetot_molar'] = redox_arc_avlues['Fe3+/Fetot_molar'] #add this column to mineralogy df
 mineralogy_arc_values['fl/rk wt ratio'] = redox_arc_avlues['fl/rk wt ratio'] #add this column to mineralogy df
 
