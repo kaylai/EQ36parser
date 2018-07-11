@@ -173,6 +173,9 @@ minmoles_df = minmoles_df.fillna(0)
 minmoles_df['moles total minerals'] = sum((minmoles_df[col] for col in minmoles_df.columns))
 minmoles_df = minmoles_df.drop_duplicates()
 
+#Remove log-zi=-999 value row
+cleaned_df = cleaned_df.iloc[1:]
+
 #create a dataframe with values of molar proportions of each mineral
 molpropmin_df = pandas.DataFrame()
 
@@ -181,6 +184,7 @@ for col in minmoles_df.columns:
 		pass
 	else:
 		molpropmin_df[col.replace('_moles', '_prop')] = minmoles_df[col] / minmoles_df['moles total minerals']
+
 
 molpropmin_df['log-zi'] = cleaned_df['log-zi']
 
@@ -193,16 +197,13 @@ cleaned_df = cleaned_df.set_index('log-zi')
 cleaned_df2 = cleaned_df2.set_index('log-zi')
 molpropmin_df = molpropmin_df.set_index('log-zi')
 
-#Remove log-zi=-999 value row
-cleaned_df = cleaned_df.iloc[1:]
-#molpropmin_df = molpropmin_df.iloc[1:]
 
 
 ##------Remove duplicate indices------##
 cleaned_df = cleaned_df.drop_duplicates(subset=None, keep='first', inplace=False) #delete duplicate total row
-cleaned_df2 = cleaned_df2.drop_duplicates(subset=None, keep='first', inplace=False) #delete duplicate total row
-minmoles_df = minmoles_df.drop_duplicates(subset=None, keep='first', inplace=False) #delete duplicate total row
-molpropmin_df = molpropmin_df.drop_duplicates(subset=None, keep='first', inplace=False) #delete duplicate total row
+# cleaned_df2 = cleaned_df2.drop_duplicates(subset=None, keep='first', inplace=False) #delete duplicate total row
+# minmoles_df = minmoles_df.drop_duplicates(subset=None, keep='first', inplace=False) #delete duplicate total row
+# molpropmin_df = molpropmin_df.drop_duplicates(subset=None, keep='first', inplace=False) #delete duplicate total row
 
 #Remove duplicate indices with distinct row vals
 new_index = cleaned_df.index.values.tolist()
@@ -334,18 +335,26 @@ plt.savefig('Fe23.png')
 
 ###------PRINTING OUTPUT TO TERMINAL------###
 flrk_arc_values = {}
-mineralogy_arc_values = {}
-mineralogy_by_mineral = {}
+
+# mineralogy_by_mineral = {}
 for index, row in redox_output_df.iterrows():
 	if row["Fe3+/Fetot_molar"] < 0.30 and row["Fe3+/Fetot_molar"] > 0.20:
 		flrk_arc_values[index] = row["fl/rk wt ratio"]
 
-header_list = list(molpropmin_df.columns.get_values())
-for index, row in molpropmin_df.iterrows():
-	if index in flrk_arc_values.keys():
-		for i in range(len(header_list)):
-			mineralogy_by_mineral[header_list[i]] = row[header_list[i]]
-		mineralogy_arc_values[index] = mineralogy_by_mineral
+mineralogy_arc_values = molpropmin_df.loc[molpropmin_df.index.isin(flrk_arc_values)]
+redox_arc_avlues = redox_output_df.loc[redox_output_df.index.isin(flrk_arc_values)] #get values from redox_output_df at logzi values where Fe3+/Fetot within arc values
+mineralogy_arc_values['Fe3+/Fetot_molar'] = redox_arc_avlues['Fe3+/Fetot_molar'] #add this column to mineralogy df
+mineralogy_arc_values['fl/rk wt ratio'] = redox_arc_avlues['fl/rk wt ratio'] #add this column to mineralogy df
+
+
+# header_list = list(molpropmin_df.columns.get_values())
+# for index, row in molpropmin_df.iterrows():
+# 	if index in flrk_arc_values.keys():
+# 		for i in range(len(header_list)):
+# 			print header_list[i]
+# 			print row[header_list[i]]
+# 			mineralogy_by_mineral[header_list[i]].append(row[header_list[i]])
+# 		mineralogy_arc_values[index] = mineralogy_by_mineral
 
 print "\n"
 print "RESTULS OF THE MODEL RUN:"
@@ -356,8 +365,9 @@ elif len(flrk_arc_values) == 1:
 	print "     fl/rk ratio = " + str(round(flrk_arc_values.values()[0], 2))
 
 print "\n"
-print "     Mineralogy: "
-for key, value in mineralogy_arc_values.iteritems():
-	for key, value in value.iteritems():
-		if value > 0.0:
-			print "     " + str(key) + " = " + str(round(value, 2))
+print "Mineralogy: "
+pandas.set_option('precision', 4) #rounds displayed numbers to 4 decimal points
+pandas.set_option('display.max_columns', None) #allows pandas to display all columns of a df instead of a summary
+print mineralogy_arc_values
+print "\n"
+
