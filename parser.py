@@ -5,6 +5,7 @@ import numpy
 import matplotlib.pyplot as plt
 from scipy.interpolate import spline
 
+
 ###SAVE SOME CONSTANTS FOR LATER USE###
 #Molecular weights dict
 MW_dict = {'MAGNETIT':111.69, 'BRUCITE':58.325, 'CLINOCHL':555.8245, 'PYROPE':403.13}
@@ -86,6 +87,7 @@ df2 = df2.dropna(axis=1, how='all')
 
 df2.columns = df2.iloc[0]
 df2 = df2.reindex(df2.index.drop(0))
+
 
 #Get header rows
 header_list = [idx for idx, row in df.iterrows() if row['log-zi'] == str('log-zi')] #gets all rows that are headers of a new table
@@ -185,7 +187,6 @@ for col in minmoles_df.columns:
 	else:
 		molpropmin_df[col.replace('_moles', '_prop')] = minmoles_df[col] / minmoles_df['moles total minerals']
 
-
 molpropmin_df['log-zi'] = cleaned_df['log-zi']
 
 #save numeric values as float instead of text for excel output
@@ -196,6 +197,7 @@ for col in molpropmin_df.columns:
 cleaned_df = cleaned_df.set_index('log-zi')
 cleaned_df2 = cleaned_df2.set_index('log-zi')
 molpropmin_df = molpropmin_df.set_index('log-zi')
+
 
 
 
@@ -232,6 +234,13 @@ for i in range(1,len(new_index2)):
 cleaned_df2['new_index2'] = new_index2
 cleaned_df2 = cleaned_df2.set_index('new_index2')
 cleaned_df2.index.name = 'log-zi'
+
+#for the case where OLIVINE is OLIVINE(SS) or CLINOPYROXENE is CPX_SUBCALCIC
+for col in minmoles_df.columns:
+	if col == 'OLIVINE(_moles':
+		minmoles_df.rename(columns= {'OLIVINE(_moles' : 'OLIVINE_moles'}, inplace=True)
+	if col == 'CPX_SUBC_moles':
+		minmoles_df.rename(columns= {'CPX_SUBC_moles' : 'CLINOPYR_moles'}, inplace=True)
 
 #--------------------------------------#
 
@@ -277,14 +286,38 @@ redox_output_df.index.name = 'log-zi'
 
 #calculate and save some values
 redox_output_df["moles_Fe3+"] = minmoles_df["MAGNETIT_moles"]
+
+#Make a df of all minerals phases
+Fe2_minerals_df = pandas.DataFrame()
+if "MAGNETIT_moles" in minmoles_df.columns:
+	Fe2_minerals_df["magnetite_Fe2"] = minmoles_df["MAGNETIT_moles"]
+else:
+	Fe2_minerals_df["magnetite_Fe2"] = 0
+
+if "OLIVINE_moles" in minmoles_df.columns:
+	Fe2_minerals_df["olivine_Fe2"] = 2 * minmoles_df["OLIVINE_moles"] * moles_and_ss_df["FAYALITE"]
+else:
+	Fe2_minerals_df["olivine_Fe2"] = 0
+
+if "ORTHOPYR_moles" in minmoles_df.columns:
+	Fe2_minerals_df["orthopyr_Fe2"] = minmoles_df["ORTHOPYR_moles"] * moles_and_ss_df["FERROSILIT"]
+else:
+	Fe2_minerals_df["orthopyr_Fe2"] = 0
+
+if "CLINOPYR_moles" in minmoles_df.columns:
+	Fe2_minerals_df["clinopyr_Fe2"] = minmoles_df["CLINOPYR_moles"] * moles_and_ss_df["HEDENBERGI"]
+else:
+	Fe2_minerals_df["clinopyr_Fe2"] = 0
+
 redox_output_df["moles_Fe2+"] = (
-								minmoles_df["MAGNETIT_moles"] + 
-								2*minmoles_df["OLIVINE_moles"] * moles_and_ss_df["FAYALITE"] + 
-								minmoles_df["ORTHOPYR_moles"] * moles_and_ss_df["FERROSILIT"] + 
-								minmoles_df["CLINOPYR_moles"] * moles_and_ss_df["HEDENBERGI"]
+								Fe2_minerals_df["magnetite_Fe2"] + 
+								Fe2_minerals_df["olivine_Fe2"] + 
+								Fe2_minerals_df["orthopyr_Fe2"] + 
+								Fe2_minerals_df["clinopyr_Fe2"]
 								)
 redox_output_df["Fe3+/Fetot_molar"] = redox_output_df["moles_Fe3+"] / (redox_output_df["moles_Fe3+"] + redox_output_df["moles_Fe2+"])
 redox_output_df["fl/rk wt ratio"] = 1 / mingrams_df["Total kg"]
+
 
 #---------------------------------------------------------------------#
 
@@ -294,6 +327,7 @@ writer = pandas.ExcelWriter('cleaned_tab.xlsx', engine='xlsxwriter')
 cleaned_df.to_excel(writer, sheet_name='logMoles Minerals')
 cleaned_df2.to_excel(writer, sheet_name='Solid Solutions')
 molpropmin_df.to_excel(writer, sheet_name='Mineral proportions')
+redox_output_df.to_excel(writer, sheet_name='Redox Output')
 writer.save()
 #--------------------------------------------#
 
