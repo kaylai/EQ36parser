@@ -219,12 +219,12 @@ cleaned_df['new_index'] = new_index
 cleaned_df = cleaned_df.set_index('new_index')
 cleaned_df.index.name = 'log-zi'
 
-molpropmin_df = molpropmin_df.reset_index().dropna().set_index('log-zi') #remove any NaN values from the index column
+if len(new_index) == len(molpropmin_df) - 1: #if minmoles df is one row too long, drop the first row (the -999 logzi step)
+	molpropmin_df = molpropmin_df.iloc[1:]
 molpropmin_df['new_index'] = new_index #molpropmin has identical index to df
 molpropmin_df = molpropmin_df.set_index('new_index') 
 molpropmin_df.index.name = 'log-zi'
 
-minmoles_df = minmoles_df.reset_index().dropna() #remove any NaN values from the index column
 if len(new_index) == len(minmoles_df) - 1: #if minmoles df is one row too long, drop the first row (the -999 logzi step)
 	minmoles_df = minmoles_df.iloc[1:]
 minmoles_df['new_index'] = new_index #minmoles has identical index to df
