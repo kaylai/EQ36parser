@@ -4,11 +4,12 @@ import re
 import numpy
 import matplotlib.pyplot as plt
 from scipy.interpolate import spline
+from collections import OrderedDict
 
 
 ###SAVE SOME CONSTANTS FOR LATER USE###
 #Molecular weights dict
-MW_dict = {'MAGNETIT':111.69, 'BRUCITE':58.325, 'CLINOCHL':555.8245, 'PYROPE':403.13}
+MW_dict = {'MAGNETIT':111.69, 'BRUCITE':58.325, 'CLINOCHL':555.8245, 'TREMOLIT':812.37, 'WOLLASTO':116.16}
 
 #Molecular weights of solid solutions
 def calcMWolivine(Fa):
@@ -22,6 +23,16 @@ def calcMWopx(Fe):
 def calcMWcpx(He):
 	MW_cpx = 40.078+(55.845*He + 24.305*(1-He)) + 28.0855*2 + 16*6
 	return MW_cpx
+
+def calcMWbiotite(Fe):
+	#K(Fe,Mg)3AlSi3O10(OH)2
+	MW_biotite = 74.5513 + 3*(55.845*Fe + 24.305*(1-Fe)) + 26.9815 + 3*28.0855 + 10*16 + 2*16 + 2*1
+	return MW_biotite
+
+def calcMWgarnet(Al, Py, Gr):
+	#(Fe,Mg,Ca)3Al2Si3O12
+	MW_garnet = 3*(55.845*Al + 24.305*Py + 40.078*Gr) + 2*26.9815 + 3*28.0855 + 12*16
+	return MW_garnet
 
 #initialize rows
 rows = []
@@ -78,7 +89,7 @@ df = df.dropna(axis=1, how='all')
 df.columns = df.iloc[0]
 df = df.reindex(df.index.drop(0))
 
-df2 = pandas.DataFrame(solidsolution_rows_clean_headers)
+df2 = pandas.DataFrame(solidsolution_rows_clean_headers) #solid solutions
 c2 = df2.columns[0]
 df2 = df2[c2].str.split(' ', expand=True)
 df2 = df2.replace('\n', numpy.nan, regex=True)
@@ -87,10 +98,41 @@ df2 = df2.dropna(axis=1, how='all')
 
 df2.columns = df2.iloc[0]
 df2 = df2.reindex(df2.index.drop(0))
+df2.fillna(value=numpy.nan, inplace=True)
+df2 = df2.dropna(how='all')
+
+list_of_first_values_in_row = [] #make a list of the first value (not index) in each row of the df2
+for index, row in df2.iterrows():
+	list_of_first_values_in_row.append(row.values[0])
+
+#---- look for "hanging" rows ----#
+if len(list_of_first_values_in_row) > 3 * (list_of_first_values_in_row.count('log-zi') + 1):
+	hanging_rows = True
+else:
+	hanging_rows = False
+#---------------------------------#
+
+if hanging_rows == True:	#only do this stuff if there are "hanging rows" (ie rows go longer than 7 columns and wrap onto next row)
+	df2_extras2 = df2.shift(-3) #make a new dataframe where hanging rows are reindexed to correct index/log-zi value
+
+	list_of_rows = []
+	df2 = pandas.concat([df2,df2_extras2], axis=1, sort=False) #TODO-001 (cludgey fix below...) BUG!! Fails when new mineral enters but is not a hanging row; adds fake value for mineral, which so far in testing is alwasy a negative number (it's actually pulling a log-zi value)
+
+	list_of_rows.append(list(OrderedDict.fromkeys(df2.columns.tolist()))) #make a list of column headers and preserve order
+	for index, row in df2.iterrows():
+		list_of_rows.append(list(OrderedDict.fromkeys(row.values))) #make a list of row values and preserve order
+	df2 = pandas.DataFrame(list_of_rows)
+	df2 = df2.rename(columns=df2.iloc[0]).iloc[1:] #rename headers as the first row, drop that first row (since it's now redundant)
 
 
+if hanging_rows == False:
+	pass
+
+df2.fillna(value=numpy.nan, inplace=True)
+df2 = df2.dropna(how='all')
+print df2
 #Get header rows
-header_list = [idx for idx, row in df.iterrows() if row['log-zi'] == str('log-zi')] #gets all rows that are headers of a new table
+header_list = [idx for idx, row in df.iterrows() if row['log-zi'] == str('log-zi')] #get all indices of rows that start with 'log-zi'
 header_list.append(0) #add first chunk of values
 header_list.sort() #sorts list numerically
 
@@ -139,6 +181,7 @@ for key, value in header_dict_ss.iteritems():
 		if key == final_list_value_ss:
 			header_dict_ss[final_list_value_ss] = df2[-final_chunk_len_ss+1:]
 
+cleaned_header_dict_ss = {} #Need to make a new dict that has only entries starting with 'log-zi' in case of hanging rows
 for key, value in header_dict_ss.iteritems():
 	if key == 0:
 		pass
@@ -147,23 +190,53 @@ for key, value in header_dict_ss.iteritems():
 		header_dict_ss[key] = header_dict_ss[key].iloc[1:]
 	header_dict_ss[key] = header_dict_ss[key].dropna(axis=1, how='all')
 	column_names_ss = header_dict_ss[key].columns.get_values().tolist()
+	value = value.loc[:,~value.columns.duplicated()] #drop duplicate headers in any chunk of rows
+
+	if list(value)[0] == 'log-zi': #if the first header value is 'log-zi'
+		cleaned_header_dict_ss[key] = value.iloc[:2] #take only the first three rows in any chunk, since the rest will be hanging rows
+	else:
+		pass
 
 #combine separate dataframes into one and sort by index value
 cleaned_df = pandas.concat((header_dict[key] for key, value in header_dict.iteritems()), sort=False)
 cleaned_df = cleaned_df.sort_index(axis=0, ascending=True)
 
-cleaned_df2 = pandas.concat((header_dict_ss[key] for key, value in header_dict_ss.iteritems()), sort=False)
+cleaned_df2 = pandas.concat((cleaned_header_dict_ss[key] for key, value in cleaned_header_dict_ss.iteritems()), sort=False)
 cleaned_df2 = cleaned_df2.sort_index(axis=0, ascending=True)
 
 #remove any rows with no numeric values
 cleaned_df = cleaned_df[pandas.to_numeric(cleaned_df['log-zi'], errors='coerce').notnull()]
 cleaned_df2 = cleaned_df2[pandas.to_numeric(cleaned_df2['log-zi'], errors='coerce').notnull()]
+cleaned_df2.dropna(axis=1, how='all', inplace=True)
+
 
 #save numeric values as float instead of text
 for col in cleaned_df.columns[0:]:
 	cleaned_df[col] = cleaned_df[col].astype(float)
 for col in cleaned_df2.columns[0:]:
 	cleaned_df2[col] = cleaned_df2[col].astype(float)
+
+#Cludgey fix to TODO-001 Bug in case of hanging rows
+#THIS IS STILL A BUG
+#This only works if there is an error grabbing hanging rows where log-zi is < 0
+mineral_cols = cleaned_df2.iloc[:, 1:] #takes a slice of all rows that aren't 'log-zi'
+cleaned_df2[mineral_cols < 0] = 0 #changes any negative values to 0
+for index, row in cleaned_df2.iterrows():
+	if 'FORSERITE' in list(cleaned_df2) or 'FAYALITE' in list(cleaned_df2):
+		if row['FORSTERITE'] == 0 or row['FAYALITE'] == 0:
+			row['FAYALITE'] = 0
+			row['FORSTERITE'] = 0
+	if 'PHLOGOPITE' in list(cleaned_df) or 'ANNITE' in list(cleaned_df):
+		if row['PHLOGOPITE'] == 0 or row['ANNITE'] == 0:
+			row['PHLOGOPITE'] = 0
+			row['ANNITE'] = 0
+	if 'PYROPE' in list(cleaned_df2) or 'ALMANDINE' in list(cleaned_df2) or 'GROSSULAR' in list(cleaned_df2):
+		if row['PYROPE'] == 0 or row['ALMANDINE'] == 0 or row['GROSSULAR'] == 0:
+			row['PYROPE'] = 0
+			row['ALMANDINE'] = 0
+			row['GROSSULAR'] = 0
+
+print cleaned_df2
 
 #create a dataframe with values as moles of minerals (instead of log moles)
 minmoles_df = pandas.DataFrame()
@@ -245,6 +318,10 @@ for col in minmoles_df.columns:
 		minmoles_df.rename(columns= {'OLIVINE(_moles' : 'OLIVINE_moles'}, inplace=True)
 	if col == 'CPX_SUBC_moles':
 		minmoles_df.rename(columns= {'CPX_SUBC_moles' : 'CLINOPYR_moles'}, inplace=True)
+	if col == 'BIOTITE(_moles':
+		minmoles_df.rename(columns= {'BIOTITE(_moles' : 'BIOTITE_moles'}, inplace=True)
+	if col == 'GARNET(S_moles':
+		minmoles_df.rename(columns= {'GARNET(S_moles' : 'GARNET_moles'}, inplace=True)
 
 #--------------------------------------#
 
@@ -255,6 +332,8 @@ moles_and_ss_df = pandas.concat([minmoles_df, cleaned_df2], axis=1, sort=False, 
 moles_and_ss_df = moles_and_ss_df.rename(columns= lambda x: x.replace('_moles', ''))
 moles_and_ss_df = moles_and_ss_df.fillna(0)
 moles_and_ss_df = moles_and_ss_df.astype(float)
+print minmoles_df
+print moles_and_ss_df
 
 #create a dataframe with grams of minerals
 mingrams_df = pandas.DataFrame()
@@ -267,14 +346,25 @@ if 'FERROSILIT' in list(moles_and_ss_df.columns.values):
 	solid_solutions_dict["ORTHOPYR"] = ["FERROSILIT", calcMWopx]
 if 'HEDENBERGI' in list(moles_and_ss_df.columns.values):
 	solid_solutions_dict["CLINOPYR"] = ["HEDENBERGI", calcMWcpx]
+if 'ANNITE' in list(moles_and_ss_df.columns.values):
+	solid_solutions_dict["BIOTITE"] = ["ANNITE", calcMWbiotite]
+if 'ALMANDINE' in list(moles_and_ss_df.columns.values):
+	solid_solutions_dict["GARNET"] = ["ALMANDINE", "PYROPE", "GROSSULAR", calcMWgarnet] #Must pass three arguments for three end-members for garnet MW calc
 
 for col in moles_and_ss_df.columns.values:
 	if col in MW_dict:
 		mingrams_df[col] = moles_and_ss_df[col] * MW_dict[col]
 	if col in solid_solutions_dict:
-		mingrams_df[col] = moles_and_ss_df[col] * solid_solutions_dict[col][1](moles_and_ss_df[solid_solutions_dict[col][0]])
+		if col == "GARNET": #Calculation of MW of garnet requires THREE end-members, so all must be passed
+			mingrams_df[col] = moles_and_ss_df[col] * solid_solutions_dict[col][3](moles_and_ss_df[solid_solutions_dict[col][0]],
+																				   moles_and_ss_df[solid_solutions_dict[col][1]],
+																				   moles_and_ss_df[solid_solutions_dict[col][2]]) 
+		else: #Calculation of MW of all other phases only requires TWO end-members, so one can be passed and the other calculated (see def statements at top of script)
+			mingrams_df[col] = moles_and_ss_df[col] * solid_solutions_dict[col][1](moles_and_ss_df[solid_solutions_dict[col][0]])
 
 mingrams_df["Total grams"] = sum((mingrams_df[col] for col in mingrams_df.columns))
+print "mingrams"
+print mingrams_df
 mingrams_df["Total kg"] = mingrams_df["Total grams"] / 1000.0
 #----------------------------------------#
 
@@ -313,11 +403,23 @@ if "CLINOPYR_moles" in minmoles_df.columns:
 else:
 	Fe2_minerals_df["clinopyr_Fe2"] = 0
 
+if "BIOTITE_moles" in minmoles_df.columns:
+	Fe2_minerals_df["biotite_Fe2"] = minmoles_df["BIOTITE_moles"] *  moles_and_ss_df["ANNITE"]
+else:
+	Fe2_minerals_df["biotite_Fe2"] = 0
+
+if "GARNET_moles" in minmoles_df.columns:
+	Fe2_minerals_df["almandine_Fe2"] = minmoles_df["GARNET_moles"] * moles_and_ss_df["ALMANDINE"]
+else:
+	Fe2_minerals_df["almandine_Fe2"] = 0
+
 redox_output_df["moles_Fe2+"] = (
 								Fe2_minerals_df["magnetite_Fe2"] + 
 								Fe2_minerals_df["olivine_Fe2"] + 
 								Fe2_minerals_df["orthopyr_Fe2"] + 
-								Fe2_minerals_df["clinopyr_Fe2"]
+								Fe2_minerals_df["clinopyr_Fe2"] +
+								Fe2_minerals_df["biotite_Fe2"] + 
+								Fe2_minerals_df["almandine_Fe2"] #currently, Garnet only hosts Fe2+. In future versions of EQ6 it may host Fe3+ and this will need to be changed
 								)
 redox_output_df["Fe3+/Fetot_molar"] = redox_output_df["moles_Fe3+"] / (redox_output_df["moles_Fe3+"] + redox_output_df["moles_Fe2+"])
 redox_output_df["fl/rk wt ratio"] = 1 / mingrams_df["Total kg"]
