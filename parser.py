@@ -113,6 +113,16 @@ else:
 #---------------------------------#
 
 if hanging_rows == True:	#only do this stuff if there are "hanging rows" (ie rows go longer than 7 columns and wrap onto next row)
+	#FIRST need to make sure all rows in dataframe have same number of columns, otherwise bad things happen when I concat the shifted df
+	max_columns = 0
+	for index, row in df2.iterrows():
+		no_of_columns = len(df2.columns)
+		if no_of_columns >  max_columns:
+			max_columns = no_of_columns
+	for index, row in df2.iterrows():
+		while len(df2.columns) < max_columns:
+			row["new header"] = "hello" #TODO 27 sept 2018 THIS IS NOT WORKING AHHHHHH
+	print df2
 	df2_extras2 = df2.shift(-3) #make a new dataframe where hanging rows are reindexed to correct index/log-zi value
 
 	list_of_rows = []
@@ -124,13 +134,12 @@ if hanging_rows == True:	#only do this stuff if there are "hanging rows" (ie row
 	df2 = pandas.DataFrame(list_of_rows)
 	df2 = df2.rename(columns=df2.iloc[0]).iloc[1:] #rename headers as the first row, drop that first row (since it's now redundant)
 
-
 if hanging_rows == False:
 	pass
-
+print df2
 df2.fillna(value=numpy.nan, inplace=True)
 df2 = df2.dropna(how='all')
-print df2
+
 #Get header rows
 header_list = [idx for idx, row in df.iterrows() if row['log-zi'] == str('log-zi')] #get all indices of rows that start with 'log-zi'
 header_list.append(0) #add first chunk of values
@@ -193,23 +202,31 @@ for key, value in header_dict_ss.iteritems():
 	value = value.loc[:,~value.columns.duplicated()] #drop duplicate headers in any chunk of rows
 
 	if list(value)[0] == 'log-zi': #if the first header value is 'log-zi'
-		cleaned_header_dict_ss[key] = value.iloc[:2] #take only the first three rows in any chunk, since the rest will be hanging rows
+		new_value = value.iloc[:2] #take only the first three rows in any chunk, since the rest will be hanging rows
+		new_value.dropna(axis=1, how='all', inplace=True)
+		new_value.dropna(axis=0, how='all', inplace=True)
+		cleaned_header_dict_ss[key] = new_value
 	else:
 		pass
 
+for key, value in header_dict_ss.iteritems():
+	print "key"
+	print key
+	print "value"
+	print value
 #combine separate dataframes into one and sort by index value
-cleaned_df = pandas.concat((header_dict[key] for key, value in header_dict.iteritems()), sort=False)
+cleaned_df = pandas.concat((header_dict[key] for key, value in header_dict.iteritems()), sort=False) #concat all dataframes stored as keys in header_dict
 cleaned_df = cleaned_df.sort_index(axis=0, ascending=True)
 
 cleaned_df2 = pandas.concat((cleaned_header_dict_ss[key] for key, value in cleaned_header_dict_ss.iteritems()), sort=False)
 cleaned_df2 = cleaned_df2.sort_index(axis=0, ascending=True)
-
+print cleaned_df2
 #remove any rows with no numeric values
 cleaned_df = cleaned_df[pandas.to_numeric(cleaned_df['log-zi'], errors='coerce').notnull()]
 cleaned_df2 = cleaned_df2[pandas.to_numeric(cleaned_df2['log-zi'], errors='coerce').notnull()]
 cleaned_df2.dropna(axis=1, how='all', inplace=True)
 
-
+print cleaned_df2
 #save numeric values as float instead of text
 for col in cleaned_df.columns[0:]:
 	cleaned_df[col] = cleaned_df[col].astype(float)
@@ -235,8 +252,6 @@ for index, row in cleaned_df2.iterrows():
 			row['PYROPE'] = 0
 			row['ALMANDINE'] = 0
 			row['GROSSULAR'] = 0
-
-print cleaned_df2
 
 #create a dataframe with values as moles of minerals (instead of log moles)
 minmoles_df = pandas.DataFrame()
@@ -332,8 +347,6 @@ moles_and_ss_df = pandas.concat([minmoles_df, cleaned_df2], axis=1, sort=False, 
 moles_and_ss_df = moles_and_ss_df.rename(columns= lambda x: x.replace('_moles', ''))
 moles_and_ss_df = moles_and_ss_df.fillna(0)
 moles_and_ss_df = moles_and_ss_df.astype(float)
-print minmoles_df
-print moles_and_ss_df
 
 #create a dataframe with grams of minerals
 mingrams_df = pandas.DataFrame()
@@ -363,8 +376,6 @@ for col in moles_and_ss_df.columns.values:
 			mingrams_df[col] = moles_and_ss_df[col] * solid_solutions_dict[col][1](moles_and_ss_df[solid_solutions_dict[col][0]])
 
 mingrams_df["Total grams"] = sum((mingrams_df[col] for col in mingrams_df.columns))
-print "mingrams"
-print mingrams_df
 mingrams_df["Total kg"] = mingrams_df["Total grams"] / 1000.0
 #----------------------------------------#
 
